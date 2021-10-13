@@ -217,6 +217,59 @@ impl<'a, T: FormattableCurrency> Money<'a, T> {
         &self.amount
     }
 
+    /// Returns the minor amount required to represent the current value.
+    ///
+    /// For currencies that have no minor units, this is simply the major
+    /// amount (e.g. ￥500 will return `Some(500)`);
+    ///
+    /// On overflow `None` is returned.
+    ///
+    /// Requires the `maths` feature to be enabled.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use rusty_money::{define_currency_set, Money};
+    ///
+    /// define_currency_set!(
+    ///     test {
+    ///         USD: {
+    ///             code: "USD",
+    ///             exponent: 2,
+    ///             locale: EnUs,
+    ///             minor_units: 100,
+    ///             name: "USD",
+    ///             symbol: "$",
+    ///             symbol_first: true,
+    ///         }
+    ///     }
+    /// );
+    ///
+    /// let money = Money::from_minor(350, test::USD);
+    /// let minor_amount = money.minor_amount().unwrap();
+    /// assert_eq!(350, minor_amount);
+    ///
+    /// let money = Money::from_major(120, test::USD);
+    /// let minor_amount = money.minor_amount().unwrap();
+    /// assert_eq!(12_000, minor_amount); // $120 is 12,000¢
+    ///
+    /// let m1 = Money::from_major(5, test::USD);
+    /// let m2 = Money::from_minor(350, test::USD);
+    /// let money = m1 + m2;
+    /// let minor_amount = money.minor_amount().unwrap();
+    /// assert_eq!(850, minor_amount); // $5 + 350¢ = $8.50
+    /// ```
+    #[cfg(feature = "maths")]
+    pub fn minor_amount(&self) -> Option<i64> {
+        use rust_decimal::prelude::{MathematicalOps, ToPrimitive};
+
+        let amount = self.amount.clone();
+        let ten = Decimal::TEN;
+
+        ten.checked_powi(self.currency.exponent() as i64)
+            .and_then(|multiplier| (amount * multiplier).to_i64())
+    }
+
     /// Returns the Currency type.
     pub fn currency(&self) -> &'a T {
         self.currency
@@ -300,13 +353,15 @@ impl<'a, T: FormattableCurrency> Money<'a, T> {
         money.amount = match strategy {
             Round::HalfDown => money
                 .amount
-                .round_dp_with_strategy(digits, rust_decimal::RoundingStrategy::RoundHalfDown),
-            Round::HalfUp => money
-                .amount
-                .round_dp_with_strategy(digits, rust_decimal::RoundingStrategy::RoundHalfUp),
-            Round::HalfEven => money
-                .amount
-                .round_dp_with_strategy(digits, rust_decimal::RoundingStrategy::BankersRounding),
+                .round_dp_with_strategy(digits, rust_decimal::RoundingStrategy::MidpointTowardZero),
+            Round::HalfUp => money.amount.round_dp_with_strategy(
+                digits,
+                rust_decimal::RoundingStrategy::MidpointAwayFromZero,
+            ),
+            Round::HalfEven => money.amount.round_dp_with_strategy(
+                digits,
+                rust_decimal::RoundingStrategy::MidpointNearestEven,
+            ),
         };
 
         money
@@ -783,5 +838,16 @@ mod tests {
         let mut money = Money::from_minor(20_000, test::BHD);
         money /= 3;
         assert_eq!(money.round(3, Round::HalfEven), expected_money);
+    }
+
+    #[test]
+    #[cfg(feature = "maths")]
+    fn money_integer_amounts() {
+        let money = Money::from_minor(667, test::USD);
+        assert_eq!(Some(667), money.minor_amount());
+
+        let m1 = Money::from_major(332, test::USD);
+        let m2 = Money::from_minor(m1.minor_amount().unwrap(), test::USD);
+        assert_eq!(m1, m2);
     }
 }
