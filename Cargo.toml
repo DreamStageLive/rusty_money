@@ -17,9 +17,10 @@ categories = ["data-structures", "rust-patterns", "cryptography::cryptocurrencie
 default=["iso"]
 iso = []
 crypto = []
+reexport = []
 maths = ["rust_decimal/maths"]
 
 
 [dependencies]
-rust_decimal = { default-features = false, version = "1.9.0" }
+rust_decimal = { default-features = false, version = "1.16.0" }
 rust_decimal_macros = "1.9.0"
