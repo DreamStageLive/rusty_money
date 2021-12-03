@@ -207,6 +207,14 @@ impl<'a, T: FormattableCurrency> Money<'a, T> {
         Money { amount, currency }
     }
 
+    /// Creates a Money object given a major and minor amount and a currency reference.
+    ///
+    /// The major amount represents major units of the currency (e.g. 1000 -> 1,000 in USD)
+    /// The integer represents minor units of the currency (e.g. 1000 -> 10.00 in USD )
+    pub fn from_major_and_minor(major: i64, minor: i64, currency: &'a T) -> Money<'a, T> {
+        Money::from_major(major, currency) + Money::from_minor(minor, currency)
+    }
+
     /// Creates a Money object given a decimal amount and a currency reference.
     pub fn from_decimal(amount: Decimal, currency: &'a T) -> Money<'a, T> {
         Money { amount, currency }
